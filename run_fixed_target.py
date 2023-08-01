@@ -167,122 +167,122 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-graphs = []
-if "Grid2d" in args.graphs:
-    graphs.append(get_cloud("Grid2d", N1=20, N2=20))
-if "Bunny" in args.graphs:
-    graphs.append(get_cloud("Bunny"))
-if "Minnesota" in args.graphs:
-    graphs.append(get_cloud("Minnesota"))
-if "Logo" in args.graphs:
-    graphs.append(get_cloud("Logo"))
-if "SwissRoll" in args.graphs:
-    graphs.append(get_cloud("SwissRoll", N=200))
+    graphs = []
+    if "Grid2d" in args.graphs:
+        graphs.append(get_cloud("Grid2d", N1=20, N2=20))
+    if "Bunny" in args.graphs:
+        graphs.append(get_cloud("Bunny"))
+    if "Minnesota" in args.graphs:
+        graphs.append(get_cloud("Minnesota"))
+    if "Logo" in args.graphs:
+        graphs.append(get_cloud("Logo"))
+    if "SwissRoll" in args.graphs:
+        graphs.append(get_cloud("SwissRoll", N=200))
 
-if len(graphs) == 0:
-    print("No graphs selected")
-    exit()
+    if len(graphs) == 0:
+        print("No graphs selected")
+        exit()
 
-for graph in graphs:
-    normalized_graph = normalize_sphere(graph)
+    for graph in graphs:
+        normalized_graph = normalize_sphere(graph)
 
-    model = GNNCASimple(graph.x.shape[-1], activation=args.activation, batch_norm=False)
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    loss_fn = nn.MSELoss()
+        model = GNNCASimple(graph.x.shape[-1], activation=args.activation, batch_norm=False)
+        optimizer = optim.Adam(model.parameters(), lr=args.lr)
+        loss_fn = nn.MSELoss()
 
-    history, state_cache = run(graph, args)
+        history, state_cache = run(graph, args)
 
-    # Unpack data
-    y = graph.x.cpu().numpy()
-    edge_index = graph.edge_index
+        # Unpack data
+        y = graph.x.cpu().numpy()
+        edge_index = graph.edge_index
 
-    # Run model for the twice the maximum number of steps in the cache
-    x = state_cache.initial_state()
-    steps = 2 * int(np.max(state_cache.counter))
-    zs = [x]
-    model.eval()
-    with torch.no_grad():
-        for _ in range(steps):
-            z = model(torch.tensor(zs[-1]), edge_index, 1)
-            zs.append(z.detach().cpu().numpy())
-    zs = np.stack(zs, 0)
-    z = zs[-1]
+        # Run model for the twice the maximum number of steps in the cache
+        x = state_cache.initial_state()
+        steps = 2 * int(np.max(state_cache.counter))
+        zs = [x]
+        model.eval()
+        with torch.no_grad():
+            for _ in range(steps):
+                z = model(torch.tensor(zs[-1]), edge_index, 1)
+                zs.append(z.detach().cpu().numpy())
+        zs = np.stack(zs, 0)
+        z = zs[-1]
 
-    out_dir = f"{args.outdir}/{graph.name}"
-    os.makedirs(out_dir, exist_ok=True)
-    with open(f"{out_dir}/config.txt", "w") as f:
-        f.writelines([f"{k}={v}\n" for k, v, in vars(args).items()])
-    np.savez(f"{out_dir}/run_point_cloud.npz", y=y, z=z, history=history, zs=zs)
+        out_dir = f"{args.outdir}/{graph.name}"
+        os.makedirs(out_dir, exist_ok=True)
+        with open(f"{out_dir}/config.txt", "w") as f:
+            f.writelines([f"{k}={v}\n" for k, v, in vars(args).items()])
+        np.savez(f"{out_dir}/run_point_cloud.npz", y=y, z=z, history=history, zs=zs)
 
-    # Plot difference between target and output points
-    plt.figure(figsize=(2.5, 2.5))
-    cmap = plt.get_cmap("Set2")
-    plt.scatter(*y[:, :2].T, color=cmap(0), marker=".", s=1)
-    plt.tight_layout()
-    plt.savefig(f"{out_dir}/target.pdf")
+        # Plot difference between target and output points
+        plt.figure(figsize=(2.5, 2.5))
+        cmap = plt.get_cmap("Set2")
+        plt.scatter(*y[:, :2].T, color=cmap(0), marker=".", s=1)
+        plt.tight_layout()
+        plt.savefig(f"{out_dir}/target.pdf")
 
-    plt.figure(figsize=(2.5, 2.5))
-    cmap = plt.get_cmap("Set2")
-    plt.scatter(*z[:, :2].T, color=cmap(1), marker=".", s=1)
-    plt.tight_layout()
-    plt.savefig(f"{out_dir}/endstate.pdf")
+        plt.figure(figsize=(2.5, 2.5))
+        cmap = plt.get_cmap("Set2")
+        plt.scatter(*z[:, :2].T, color=cmap(1), marker=".", s=1)
+        plt.tight_layout()
+        plt.savefig(f"{out_dir}/endstate.pdf")
 
-    # Plot loss and loss trend
-    plt.figure(figsize=(2.6, 2.5))
-    cmap = plt.get_cmap("Set2")
-    plt.plot(history["loss"], alpha=0.3, color=cmap(0), label="Real")
-    plt.plot(gaussian_filter1d(history["loss"], 50), color=cmap(0), label="Trend")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(f"{out_dir}/loss.pdf")
+        # Plot loss and loss trend
+        plt.figure(figsize=(2.6, 2.5))
+        cmap = plt.get_cmap("Set2")
+        plt.plot(history["loss"], alpha=0.3, color=cmap(0), label="Real")
+        plt.plot(gaussian_filter1d(history["loss"], 50), color=cmap(0), label="Trend")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.xscale("log")
+        plt.yscale("log")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f"{out_dir}/loss.pdf")
 
-    # Plot change between consecutive state
-    plt.figure(figsize=(2.5, 2.5))
-    cmap = plt.get_cmap("Set2")
-    change = np.abs(zs[:-1] - zs[1:]).mean((1, 2))
-    loss = np.array([loss_fn(torch.tensor(y), torch.tensor(zs[i])).cpu().numpy() for i in range(len(zs))])
-    plt.plot(change, label="Abs. change", color=cmap(0))
-    plt.plot(loss, label="Loss", color=cmap(1))
-    plt.xlabel("Step")
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(f"{out_dir}/change.pdf")
+        # Plot change between consecutive state
+        plt.figure(figsize=(2.5, 2.5))
+        cmap = plt.get_cmap("Set2")
+        change = np.abs(zs[:-1] - zs[1:]).mean((1, 2))
+        loss = np.array([loss_fn(torch.tensor(y), torch.tensor(zs[i])).cpu().numpy() for i in range(len(zs))])
+        plt.plot(change, label="Abs. change", color=cmap(0))
+        plt.plot(loss, label="Loss", color=cmap(1))
+        plt.xlabel("Step")
+        plt.xscale("log")
+        plt.yscale("log")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f"{out_dir}/change.pdf")
 
-    # Plot evolution of states
-    n_states = 10
-    plt.figure(figsize=(n_states * 2.0, 2.1))
-    for i in range(n_states):
-        plt.subplot(1, n_states, i + 1)
-        plt.scatter(*zs[i, :, :2].T, color=cmap(1), marker=".", s=1)
-        plt.title(f"t={i}")
-    plt.tight_layout()
-    plt.savefig(f"{out_dir}/evolution.pdf")
+        # Plot evolution of states
+        n_states = 10
+        plt.figure(figsize=(n_states * 2.0, 2.1))
+        for i in range(n_states):
+            plt.subplot(1, n_states, i + 1)
+            plt.scatter(*zs[i, :, :2].T, color=cmap(1), marker=".", s=1)
+            plt.title(f"t={i}")
+        plt.tight_layout()
+        plt.savefig(f"{out_dir}/evolution.pdf")
 
-    # Plot the average number of steps for the states in the cache
-    plt.figure(figsize=(2.5, 2.5))
-    cmap = plt.get_cmap("Set2")
-    s_avg, s_std = np.array(history["steps_avg"]), np.array(history["steps_std"])
-    s_max, s_min = np.array(history["steps_max"]), np.array(history["steps_min"])
-    plt.plot(s_avg, label="Avg.", color=cmap(0))
-    plt.fill_between(
-        np.arange(len(s_std)),
-        s_avg - s_std,
-        s_avg + s_std,
-        alpha=0.5,
-        color=cmap(0),
-    )
-    plt.plot(s_max, linewidth=0.5, linestyle="--", color="k", label="Max")
-    plt.xlabel("Epoch")
-    plt.ylabel("Number of steps in cache")
-    plt.legend()
-    plt.xscale("log")
-    plt.tight_layout()
-    plt.savefig(f"{out_dir}/steps_in_cache.pdf")
+        # Plot the average number of steps for the states in the cache
+        plt.figure(figsize=(2.5, 2.5))
+        cmap = plt.get_cmap("Set2")
+        s_avg, s_std = np.array(history["steps_avg"]), np.array(history["steps_std"])
+        s_max, s_min = np.array(history["steps_max"]), np.array(history["steps_min"])
+        plt.plot(s_avg, label="Avg.", color=cmap(0))
+        plt.fill_between(
+            np.arange(len(s_std)),
+            s_avg - s_std,
+            s_avg + s_std,
+            alpha=0.5,
+            color=cmap(0),
+        )
+        plt.plot(s_max, linewidth=0.5, linestyle="--", color="k", label="Max")
+        plt.xlabel("Epoch")
+        plt.ylabel("Number of steps in cache")
+        plt.legend()
+        plt.xscale("log")
+        plt.tight_layout()
+        plt.savefig(f"{out_dir}/steps_in_cache.pdf")
 
-plt.show()
+    plt.show()
